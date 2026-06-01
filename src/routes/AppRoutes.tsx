@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout';
 import { useAuthStore } from '../store/authStore';
+import Login from '../modules/auth/pages/Login';
+import Register from '../modules/auth/pages/Register';
 
 // Temporary placeholders until we build real pages in Phase 2 & 3
 const Home = () => (
@@ -18,13 +20,6 @@ const Dashboard = () => (
   <div className="max-w-7xl mx-auto px-4 py-10 w-full">
     <h1 className="text-3xl font-bold text-white">Your Dashboard</h1>
     <p className="text-gray-400 mt-2">This is where your rooms will appear.</p>
-  </div>
-);
-
-const Login = () => (
-  <div className="flex flex-col items-center justify-center flex-1">
-    <h2 className="text-2xl font-semibold">Login Page</h2>
-    <p className="text-gray-500 mt-2">Authentication forms coming in Phase 2</p>
   </div>
 );
 
@@ -46,6 +41,7 @@ export default function AppRoutes() {
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         
         {/* Protected Routes */}
         <Route
