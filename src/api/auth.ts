@@ -1,5 +1,5 @@
 import { api } from './axios';
-import { User } from '../store/authStore';
+import type { User } from '../store/authStore';
 
 export interface AuthResponse {
   success: boolean;
