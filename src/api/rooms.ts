@@ -14,16 +14,25 @@ export interface Room {
 }
 
 export const getMyRooms = async () => {
-  const response = await api.get<{ success: boolean; data: Room[] }>('/rooms/my');
-  return response.data.data;
+  const response = await api.get<{ success: boolean; data: { rooms: Room[], count: number } }>('/rooms/my');
+  return response.data.data.rooms;
 };
 
 export const createRoom = async (data: { name: string; language: string; maxParticipants?: number }) => {
-  const response = await api.post<{ success: boolean; data: Room }>('/rooms', data);
-  return response.data.data;
+  const response = await api.post<{ success: boolean; data: { room: Room } }>('/rooms', data);
+  return response.data.data.room;
 };
 
 export const joinRoomApi = async (roomId: string) => {
-  const response = await api.post<{ success: boolean; data: Room }>(`/rooms/${roomId}/join`);
-  return response.data.data;
+  const response = await api.post<{ success: boolean; data: { room: Room } }>(`/rooms/${roomId}/join`);
+  return response.data.data.room;
+};
+
+export const getRoomById = async (roomId: string) => {
+  const response = await api.get<{ success: boolean; data: { room: Room } }>(`/rooms/${roomId}`);
+  return response.data.data.room;
+};
+
+export const leaveRoomApi = async (roomId: string) => {
+  await api.delete(`/rooms/${roomId}/leave`);
 };

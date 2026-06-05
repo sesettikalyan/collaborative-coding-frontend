@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import Login from '../modules/auth/pages/Login';
 import Register from '../modules/auth/pages/Register';
 import Dashboard from '../modules/dashboard/pages/Dashboard';
+import RoomPage from '../modules/room/pages/RoomPage';
 
 // Temporary placeholders until we build real pages in Phase 2 & 3
 const Home = () => (
@@ -43,6 +44,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/room/:roomId"
+          element={
+            <ProtectedRoute>
+              <RoomPage />
             </ProtectedRoute>
           }
         />

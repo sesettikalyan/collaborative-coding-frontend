@@ -64,14 +64,14 @@ export default function Dashboard() {
 
   return (
     <div className="w-full space-y-10">
-      
+
       {/* Header & Stats */}
       <div className="flex flex-col md:flex-row justify-between gap-6 items-start md:items-end">
         <div>
           <h1 className="text-4xl font-extrabold text-white tracking-tight">Welcome, {user?.username}</h1>
           <p className="text-gray-400 mt-2 text-lg">Here's what's happening with your collaborative sessions.</p>
         </div>
-        
+
         <div className="flex gap-4 w-full md:w-auto">
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-center gap-4 flex-1 md:min-w-[140px] shadow-sm">
             <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-xl"><Code2 className="w-6 h-6" /></div>
@@ -92,14 +92,14 @@ export default function Dashboard() {
 
       {/* Actions */}
       <div className="flex gap-4">
-        <button 
+        <button
           onClick={() => setIsCreateModalOpen(true)}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg hover:shadow-indigo-500/25 active:scale-95"
         >
           <Plus className="w-5 h-5" />
           Create New Room
         </button>
-        <button 
+        <button
           onClick={() => setIsJoinModalOpen(true)}
           className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-sm active:scale-95 border border-gray-700"
         >
@@ -124,9 +124,9 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms?.map((room) => (
-              <motion.div 
+              <motion.div
                 whileHover={{ y: -4 }}
-                key={room._id} 
+                key={room._id}
                 onClick={() => navigate(`/room/${room.roomId}`)}
                 className="bg-gray-900 border border-gray-800 hover:border-indigo-500/50 rounded-2xl p-6 cursor-pointer transition-all shadow-sm hover:shadow-xl group"
               >
