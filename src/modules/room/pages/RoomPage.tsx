@@ -4,8 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
 import Editor from '@monaco-editor/react';
 import { getRoomById, leaveRoomApi } from '../../../api/rooms';
+import { runCodeApi, ExecutionResponse } from '../../../api/execution';
 import { useAuthStore } from '../../../store/authStore';
-import { Loader2, Users, Play, LogOut, Code2 } from 'lucide-react';
+import { Loader2, Users, Play, LogOut, Code2, Terminal, X, CheckCircle, XCircle } from 'lucide-react';
 
 const SOCKET_EVENTS = {
   CONNECT: 'connect',
@@ -29,6 +30,11 @@ export default function RoomPage() {
   const [code, setCode] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
   
+  // Execution states
+  const [output, setOutput] = useState<ExecutionResponse | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isOutputOpen, setIsOutputOpen] = useState(false);
+
   const isUpdatingRef = useRef(false);
 
   const { data: room, isLoading } = useQuery({
@@ -105,8 +111,29 @@ export default function RoomPage() {
     }
   };
 
-  const handleRunCode = () => {
-    alert('Code execution coming in Phase 5!');
+  const handleRunCode = async () => {
+    setIsOutputOpen(true);
+    setIsExecuting(true);
+    setOutput(null);
+    try {
+      const data = await runCodeApi({
+        language: room?.language || 'javascript',
+        code,
+      });
+      setOutput(data);
+    } catch (err: any) {
+      setOutput({
+        stdout: null,
+        time: null,
+        memory: null,
+        stderr: err.response?.data?.message || 'Execution failed',
+        compile_output: null,
+        message: null,
+        status: { id: 13, description: 'Internal Server Error' }
+      });
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   if (isLoading) {
@@ -178,10 +205,17 @@ export default function RoomPage() {
           
           <div className="flex items-center gap-3">
             <button 
-              onClick={handleRunCode}
-              className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors shadow-lg shadow-emerald-500/20"
+              onClick={() => setIsOutputOpen(!isOutputOpen)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-lg transition-colors border border-gray-700"
             >
-              <Play className="w-4 h-4 fill-current" /> Run
+              <Terminal className="w-4 h-4" /> {isOutputOpen ? 'Hide Output' : 'Show Output'}
+            </button>
+            <button 
+              onClick={handleRunCode}
+              disabled={isExecuting}
+              className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+            >
+              {isExecuting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />} Run
             </button>
             <button 
               onClick={handleLeaveRoom}
@@ -214,6 +248,56 @@ export default function RoomPage() {
             }}
           />
         </div>
+
+        {/* Output Panel */}
+        {isOutputOpen && (
+          <div className="h-64 bg-[#0d0d0d] border-t border-gray-800 flex flex-col shrink-0 shadow-[0_-10px_40px_rgba(0,0,0,0.3)] z-20">
+            <div className="h-10 border-b border-gray-800 flex items-center justify-between px-4 bg-gray-900/80">
+              <div className="flex items-center gap-2 text-gray-300 text-sm font-medium">
+                <Terminal className="w-4 h-4" /> Execution Output
+              </div>
+              <button onClick={() => setIsOutputOpen(false)} className="text-gray-500 hover:text-white transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 font-mono text-sm">
+              {isExecuting ? (
+                <div className="flex items-center gap-3 text-gray-400">
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Running code securely on Judge0...
+                </div>
+              ) : output ? (
+                <div className="space-y-4">
+                  {/* Status Banner */}
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${output.status.id <= 3 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+                    {output.status.id <= 3 ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                    <span className="font-semibold">{output.status.description}</span>
+                    {output.time && <span className="ml-auto text-xs opacity-70 bg-black/20 px-2 py-0.5 rounded">{output.time}s • {output.memory}KB</span>}
+                  </div>
+                  
+                  {/* Stdout */}
+                  {output.stdout && (
+                    <div>
+                      <div className="text-[11px] text-gray-500 mb-1.5 uppercase tracking-widest font-bold">Standard Output</div>
+                      <pre className="text-gray-300 bg-black/60 p-3.5 rounded-lg overflow-x-auto border border-gray-800/80 leading-relaxed shadow-inner">{output.stdout}</pre>
+                    </div>
+                  )}
+
+                  {/* Stderr & Compile Errors */}
+                  {(output.stderr || output.compile_output || output.message) && (
+                    <div>
+                      <div className="text-[11px] text-red-500/70 mb-1.5 uppercase tracking-widest font-bold">Error Output</div>
+                      <pre className="text-red-400 bg-red-950/20 p-3.5 rounded-lg overflow-x-auto border border-red-900/30 leading-relaxed shadow-inner">
+                        {output.stderr || output.compile_output || output.message}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-gray-600 italic h-full flex items-center justify-center">No output available. Click "Run" to execute your code.</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
