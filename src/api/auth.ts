@@ -16,3 +16,8 @@ export const registerApi = async (data: any) => {
   const response = await api.post<AuthResponse>('/auth/register', data);
   return response.data;
 };
+
+export const getUserStatsApi = async () => {
+  const response = await api.get<{ success: boolean; stats: any }>('/auth/stats');
+  return response.data.stats;
+};

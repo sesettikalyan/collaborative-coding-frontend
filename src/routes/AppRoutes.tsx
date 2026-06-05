@@ -3,6 +3,7 @@ import AppLayout from '../layouts/AppLayout';
 import { useAuthStore } from '../store/authStore';
 import Login from '../modules/auth/pages/Login';
 import Register from '../modules/auth/pages/Register';
+import Dashboard from '../modules/dashboard/pages/Dashboard';
 
 // Temporary placeholders until we build real pages in Phase 2 & 3
 const Home = () => (
@@ -13,13 +14,6 @@ const Home = () => (
     <p className="text-xl text-gray-400 max-w-2xl text-center">
       A premium real-time collaborative coding environment. Create a room, invite friends, and build something amazing.
     </p>
-  </div>
-);
-
-const Dashboard = () => (
-  <div className="max-w-7xl mx-auto px-4 py-10 w-full">
-    <h1 className="text-3xl font-bold text-white">Your Dashboard</h1>
-    <p className="text-gray-400 mt-2">This is where your rooms will appear.</p>
   </div>
 );
 
