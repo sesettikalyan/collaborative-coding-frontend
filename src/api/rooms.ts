@@ -36,3 +36,12 @@ export const getRoomById = async (roomId: string) => {
 export const leaveRoomApi = async (roomId: string) => {
   await api.delete(`/rooms/${roomId}/leave`);
 };
+
+export const updateRoomLanguage = async (roomId: string, language: string) => {
+  const response = await api.put<{ success: boolean; data: { room: Room } }>(`/rooms/${roomId}/language`, { language });
+  return response.data.data.room;
+};
+
+export const deleteRoomApi = async (roomId: string) => {
+  await api.delete(`/rooms/${roomId}`);
+};

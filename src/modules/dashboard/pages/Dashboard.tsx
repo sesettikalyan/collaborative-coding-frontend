@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Users, Code2, Clock, LogIn, Loader2 } from 'lucide-react';
-import { getMyRooms, createRoom, joinRoomApi } from '../../../api/rooms';
+import { Plus, Users, Code2, Clock, LogIn, Loader2, Copy, Trash2, Check } from 'lucide-react';
+import { getMyRooms, createRoom, joinRoomApi, deleteRoomApi } from '../../../api/rooms';
 import { getUserStatsApi } from '../../../api/auth';
 import { useAuthStore } from '../../../store/authStore';
 
@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomLang, setNewRoomLang] = useState('javascript');
   const [joinRoomId, setJoinRoomId] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Fetch Rooms
   const { data: rooms, isLoading: loadingRooms } = useQuery({
@@ -52,6 +53,14 @@ export default function Dashboard() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: deleteRoomApi,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myRooms'] });
+      queryClient.invalidateQueries({ queryKey: ['userStats'] });
+    },
+  });
+
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate({ name: newRoomName, language: newRoomLang });
@@ -60,6 +69,21 @@ export default function Dashboard() {
   const handleJoinRoom = (e: React.FormEvent) => {
     e.preventDefault();
     joinMutation.mutate(joinRoomId);
+  };
+
+  const handleCopyLink = (e: React.MouseEvent, roomId: string) => {
+    e.stopPropagation();
+    const link = `${window.location.origin}/room/${roomId}`;
+    navigator.clipboard.writeText(link);
+    setCopiedId(roomId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleDeleteRoom = (e: React.MouseEvent, roomId: string) => {
+    e.stopPropagation();
+    if (confirm('Are you sure you want to delete this room? This action cannot be undone.')) {
+      deleteMutation.mutate(roomId);
+    }
   };
 
   return (
@@ -127,7 +151,7 @@ export default function Dashboard() {
               <motion.div
                 whileHover={{ y: -4 }}
                 key={room._id}
-                onClick={() => navigate(`/room/${room.roomId}`)}
+                onClick={() => navigate(`/room/${room?.roomId}`)}
                 className="bg-gray-900 border border-gray-800 hover:border-indigo-500/50 rounded-2xl p-6 cursor-pointer transition-all shadow-sm hover:shadow-xl group"
               >
                 <div className="flex justify-between items-start mb-5">
@@ -141,8 +165,30 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-gray-500" /> {room.participants.length} / {room.maxParticipants} participants
                   </div>
-                  <div className="flex items-center gap-2 mt-2 pt-4 border-t border-gray-800/60 text-xs">
-                    <Clock className="w-4 h-4 text-gray-500" /> Last updated: {new Date(room.updatedAt).toLocaleDateString()}
+                  <div className="flex items-center justify-between mt-2 pt-4 border-t border-gray-800/60 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-gray-500" /> {new Date(room.updatedAt).toLocaleDateString()}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={(e) => handleCopyLink(e, room.roomId)}
+                        className="p-1.5 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-indigo-400 transition-colors"
+                        title="Copy Room Link"
+                      >
+                        {copiedId === room.roomId ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                      
+                      {room.owner?._id === user?._id && (
+                        <button 
+                          onClick={(e) => handleDeleteRoom(e, room.roomId)}
+                          className="p-1.5 hover:bg-red-500/10 rounded-lg text-gray-400 hover:text-red-400 transition-colors"
+                          title="Delete Room"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </motion.div>

@@ -5,3 +5,58 @@
     @apply bg-gray-900 text-gray-100 font-sans antialiased m-0 p-0;
   }
 }
+
+@layer utilities {
+
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+  }
+}
+
+/* Monaco Multiplayer Cursors */
+.remote-cursor {
+  margin-left: -1px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* Color 1: Violet */
+.remote-cursor-1 { border-left: 2px solid #8b5cf6 !important; }
+.remote-selection-1 { background-color: rgba(139, 92, 246, 0.3) !important; }
+
+/* Color 2: Emerald */
+.remote-cursor-2 { border-left: 2px solid #10b981 !important; }
+.remote-selection-2 { background-color: rgba(16, 185, 129, 0.3) !important; }
+
+/* Color 3: Rose */
+.remote-cursor-3 { border-left: 2px solid #f43f5e !important; }
+.remote-selection-3 { background-color: rgba(244, 63, 94, 0.3) !important; }
+
+/* Color 4: Amber */
+.remote-cursor-4 { border-left: 2px solid #f59e0b !important; }
+.remote-selection-4 { background-color: rgba(245, 158, 11, 0.3) !important; }
+
+/* Color 5: Sky */
+.remote-cursor-5 { border-left: 2px solid #0ea5e9 !important; }
+.remote-selection-5 { background-color: rgba(14, 165, 233, 0.3) !important; }
+
+/* Color 6: Fuchsia */
+.remote-cursor-6 { border-left: 2px solid #d946ef !important; }
+.remote-selection-6 { background-color: rgba(217, 70, 239, 0.3) !important; }
+
+/* Color 7: Indigo */
+.remote-cursor-7 { border-left: 2px solid #6366f1 !important; }
+.remote-selection-7 { background-color: rgba(99, 102, 241, 0.3) !important; }
+
+/* Color 8: Teal */
+.remote-cursor-8 { border-left: 2px solid #14b8a6 !important; }
+.remote-selection-8 { background-color: rgba(20, 184, 166, 0.3) !important; }

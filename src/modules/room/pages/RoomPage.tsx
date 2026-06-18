@@ -3,15 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
 import Editor from '@monaco-editor/react';
-import { getRoomById, leaveRoomApi } from '../../../api/rooms';
-import { runCodeApi, ExecutionResponse } from '../../../api/execution';
+import { getRoomById, leaveRoomApi, updateRoomLanguage } from '../../../api/rooms';
+import { runCodeApi } from '../../../api/execution';
+import type { ExecutionResponse } from '../../../api/execution';
 import { useAuthStore } from '../../../store/authStore';
-import { Loader2, Users, Play, LogOut, Code2, Terminal, X, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, Users, Play, LogOut, Code2, Terminal, X, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
+import ChatPanel from '../../chat/components/ChatPanel';
+import CodeEditor from '../../editor/components/CodeEditor';
 
 const SOCKET_EVENTS = {
   CONNECT: 'connect',
   AUTH: 'auth',
-  AUTH_SUCCESS: 'auth:success',
   ROOM_JOIN: 'room:join',
   ROOM_JOINED: 'room:joined',
   ROOM_PARTICIPANTS: 'room:participants',
@@ -24,18 +26,44 @@ export default function RoomPage() {
   const navigate = useNavigate();
   const token = useAuthStore(state => state.token);
   const user = useAuthStore(state => state.user);
-  
+
   const [socket, setSocket] = useState<Socket | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
   const [code, setCode] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
-  
+  const [localLanguage, setLocalLanguage] = useState<string>('');
+
   // Execution states
   const [output, setOutput] = useState<ExecutionResponse | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isOutputOpen, setIsOutputOpen] = useState(false);
 
+  // Chat states
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isChatOpenRef = useRef(isChatOpen);
+
   const isUpdatingRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep ref in sync & clear unread when opened
+  useEffect(() => {
+    isChatOpenRef.current = isChatOpen;
+    if (isChatOpen) {
+      setUnreadCount(0);
+    }
+  }, [isChatOpen]);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    if (isChatOpen) {
+      // Use auto instead of smooth to prevent jittery scrolling when typing fast
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    }
+  }, [messages, isChatOpen]);
 
   const { data: room, isLoading } = useQuery({
     queryKey: ['room', roomId],
@@ -44,7 +72,15 @@ export default function RoomPage() {
   });
 
   useEffect(() => {
-    if (!roomId || !token || !room) return;
+    if (room && !localLanguage) {
+      setLocalLanguage(room.language);
+    }
+  }, [room, localLanguage]);
+
+  const isOwner = user?._id === room?.owner?._id || user?._id === room?.owner;
+
+  useEffect(() => {
+    if (!roomId || !token || !user?._id) return;
 
     // Connect to backend socket
     const socketInstance = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000', {
@@ -52,21 +88,38 @@ export default function RoomPage() {
     });
 
     socketInstance.on(SOCKET_EVENTS.CONNECT, () => {
-      socketInstance.emit(SOCKET_EVENTS.AUTH, { token });
-    });
+      // Authenticate socket using user data from store
+      socketInstance.emit(SOCKET_EVENTS.AUTH, {
+        userId: user?._id,
+        username: user?.username,
+        email: user?.email
+      });
 
-    socketInstance.on(SOCKET_EVENTS.AUTH_SUCCESS, () => {
-      setIsConnected(true);
-      socketInstance.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      // Join the room (slight delay ensures auth completes on backend first)
+      setTimeout(() => {
+        setIsConnected(true);
+        socketInstance.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      }, 300);
     });
 
     socketInstance.on(SOCKET_EVENTS.ROOM_JOINED, (data) => {
-      // Initialize code from the room data if not already set locally
-      setCode(data.room.code || '');
+      // Initialize code and participants directly from the join response
+      setCode(data.code || '');
+      setParticipants(data.participants || []);
+    });
+
+    socketInstance.on('room:user_joined', (data) => {
+      // Refresh participants when someone joins
+      socketInstance.emit('room:get_participants', { roomId });
+    });
+
+    socketInstance.on('room:user_left', (data) => {
+      // Refresh participants when someone leaves
+      socketInstance.emit('room:get_participants', { roomId });
     });
 
     socketInstance.on(SOCKET_EVENTS.ROOM_PARTICIPANTS, (data) => {
-      setParticipants(data.participants);
+      setParticipants(data.participants || []);
     });
 
     socketInstance.on(SOCKET_EVENTS.CODE_CHANGE, (data) => {
@@ -77,27 +130,56 @@ export default function RoomPage() {
       }
     });
 
+    socketInstance.on('room:language_updated', (data) => {
+      setLocalLanguage(data.language);
+    });
+
+    socketInstance.on('chat:message', (data) => {
+      setMessages((prev) => [...prev, data]);
+
+      // Increment unread count only if the chat is currently closed
+      // and the message was not sent by the current user
+      if (!isChatOpenRef.current && data.userId !== user?._id) {
+        setUnreadCount((prev) => prev + 1);
+      }
+    });
+
     setSocket(socketInstance);
 
     return () => {
       socketInstance.disconnect();
     };
-  }, [roomId, token, room, user?._id]);
+  }, [roomId, token, user?._id]);
 
   const handleEditorChange = (value: string | undefined) => {
     if (value === undefined) return;
-    
+
     setCode(value);
-    
+
     // Only emit if this change was triggered by the user typing
     if (!isUpdatingRef.current && socket && isConnected) {
       socket.emit(SOCKET_EVENTS.CODE_CHANGE, { roomId, code: value });
-      
-      // We can also emit a CODE_SAVE debounced to save to MongoDB
-      // For simplicity in MVP, we just broadcast.
+
+      // Debounce saving to MongoDB (saves 1.5s after user stops typing)
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        socket.emit(SOCKET_EVENTS.CODE_SAVE, { roomId, code: value });
+      }, 1500);
     }
-    
+
     isUpdatingRef.current = false;
+  };
+
+  const handleLanguageChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLang = e.target.value;
+    setLocalLanguage(newLang); // Optimistic UI update
+    try {
+      await updateRoomLanguage(roomId!, newLang);
+    } catch (err) {
+      console.error('Failed to update language', err);
+      // Revert on error
+      if (room) setLocalLanguage(room.language);
+    }
   };
 
   const handleLeaveRoom = async () => {
@@ -117,7 +199,7 @@ export default function RoomPage() {
     setOutput(null);
     try {
       const data = await runCodeApi({
-        language: room?.language || 'javascript',
+        language: localLanguage || room?.language || 'javascript',
         code,
       });
       setOutput(data);
@@ -157,7 +239,7 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="flex flex-1 w-full h-[calc(100vh-64px)] overflow-hidden">
+    <div className="flex flex-1 w-full min-h-0 overflow-hidden">
       {/* Sidebar: Participants */}
       <div className="w-64 bg-gray-950 border-r border-gray-800 flex-col hidden md:flex">
         <div className="p-4 border-b border-gray-800">
@@ -167,13 +249,13 @@ export default function RoomPage() {
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {participants.map((p) => (
-            <div key={p.userId} className="flex items-center gap-3">
+            <div key={p._id} className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-sm border border-indigo-500/30 shadow-sm">
-                {p.username.charAt(0).toUpperCase()}
+                {p.username?.charAt(0).toUpperCase()}
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-gray-200">
-                  {p.username} {p.userId === user?._id && '(You)'}
+                  {p.username} {p._id === user?._id && '(You)'}
                 </span>
                 <span className="text-[10px] font-medium text-emerald-400 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Online
@@ -185,39 +267,64 @@ export default function RoomPage() {
       </div>
 
       {/* Main Editor Area */}
-      <div className="flex-1 flex flex-col bg-[#1e1e1e] min-w-0">
+      <div className="flex-1 flex flex-col bg-[#1e1e1e] min-w-0 min-h-0">
         {/* Editor Toolbar */}
-        <div className="h-14 bg-gray-950 border-b border-gray-800 flex items-center justify-between px-4 sm:px-6 z-10">
+        <div className="h-14 shrink-0 bg-gray-950 border-b border-gray-800 flex items-center justify-between px-4 sm:px-6 z-10">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
               <Code2 className="w-4 h-4 text-indigo-400" />
               <span className="font-semibold text-gray-200 text-sm truncate max-w-[150px]">{room.name}</span>
             </div>
-            <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-400 uppercase tracking-widest border border-indigo-500/20">
-              {room.language}
-            </span>
+            
+            {isOwner ? (
+              <select
+                value={localLanguage || room.language}
+                onChange={handleLanguageChange}
+                className="px-2.5 py-1 text-xs font-bold bg-indigo-500/10 text-indigo-400 uppercase tracking-widest border border-indigo-500/20 rounded cursor-pointer hover:bg-indigo-500/20 focus:outline-none focus:border-indigo-500/50 transition-colors"
+              >
+                <option value="javascript" className="bg-gray-900 text-gray-200">JavaScript</option>
+                <option value="python" className="bg-gray-900 text-gray-200">Python</option>
+                <option value="java" className="bg-gray-900 text-gray-200">Java</option>
+                <option value="cpp" className="bg-gray-900 text-gray-200">C++</option>
+              </select>
+            ) : (
+              <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-400 uppercase tracking-widest border border-indigo-500/20">
+                {localLanguage || room.language}
+              </span>
+            )}
             {!isConnected && (
               <span className="text-xs text-yellow-500 flex items-center gap-1.5 font-medium bg-yellow-500/10 px-2.5 py-1 rounded border border-yellow-500/20">
-                <Loader2 className="w-3 h-3 animate-spin"/> Connecting
+                <Loader2 className="w-3 h-3 animate-spin" /> Connecting
               </span>
             )}
           </div>
-          
+
           <div className="flex items-center gap-3">
-            <button 
+            <button
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className={`relative flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors border ${isChatOpen ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}
+            >
+              <MessageSquare className="w-4 h-4" /> {isChatOpen ? 'Chat Open' : 'Chat'}
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-gray-950 shadow-sm animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setIsOutputOpen(!isOutputOpen)}
               className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-lg transition-colors border border-gray-700"
             >
               <Terminal className="w-4 h-4" /> {isOutputOpen ? 'Hide Output' : 'Show Output'}
             </button>
-            <button 
+            <button
               onClick={handleRunCode}
               disabled={isExecuting}
               className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50"
             >
               {isExecuting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />} Run
             </button>
-            <button 
+            <button
               onClick={handleLeaveRoom}
               className="flex items-center gap-2 px-4 py-1.5 bg-gray-800 hover:bg-red-500 hover:text-white text-gray-300 text-sm font-semibold rounded-lg transition-colors border border-gray-700 hover:border-red-500"
             >
@@ -227,27 +334,14 @@ export default function RoomPage() {
         </div>
 
         {/* Editor Container */}
-        <div className="flex-1 relative">
-          <Editor
-            height="100%"
-            language={room.language === 'cpp' ? 'cpp' : room.language}
-            theme="vs-dark"
-            value={code}
-            onChange={handleEditorChange}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 15,
-              wordWrap: 'on',
-              scrollBeyondLastLine: false,
-              smoothScrolling: true,
-              cursorBlinking: 'smooth',
-              cursorSmoothCaretAnimation: 'on',
-              formatOnPaste: true,
-              padding: { top: 20 },
-              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            }}
-          />
-        </div>
+        <CodeEditor
+          language={localLanguage || room.language}
+          code={code}
+          onChange={handleEditorChange}
+          socket={socket}
+          roomId={roomId || ''}
+          currentUserId={user?._id}
+        />
 
         {/* Output Panel */}
         {isOutputOpen && (
@@ -273,7 +367,7 @@ export default function RoomPage() {
                     <span className="font-semibold">{output.status.description}</span>
                     {output.time && <span className="ml-auto text-xs opacity-70 bg-black/20 px-2 py-0.5 rounded">{output.time}s • {output.memory}KB</span>}
                   </div>
-                  
+
                   {/* Stdout */}
                   {output.stdout && (
                     <div>
@@ -299,6 +393,19 @@ export default function RoomPage() {
           </div>
         )}
       </div>
+
+      {/* Chat Panel */}
+      <ChatPanel
+        socket={socket}
+        roomId={roomId || ''}
+        currentUserId={user?._id}
+        isChatOpen={isChatOpen}
+        setIsChatOpen={setIsChatOpen}
+        messages={messages}
+        messagesEndRef={messagesEndRef}
+        newMessage={newMessage}
+        setNewMessage={setNewMessage}
+      />
     </div>
   );
 }
